@@ -2,7 +2,7 @@
 
 **Repository authors:** Ghaith Al‑Gburi, Mustafa Al-Gburi
 
-**Status:** draft / in-development — power-estimation tools and example outputs
+**Status:** completed
 
 ---
 
