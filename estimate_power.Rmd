@@ -1,0 +1,153 @@
+---
+title: "Migraine Screening Empirical Power Estimation: Reproducible Report"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+\newpage
+
+# Settings
+
+## Clear working environment
+
+```{r}
+# Clear R environment
+rm(list = ls())
+```
+
+## Set random seed
+
+```{r}
+set.seed(123)
+```
+
+## Import and inspect data attributes
+
+```{r}
+# Read the data file
+migraine_df <- read.csv("migraine_screening_dataset.csv")
+
+attributes(migraine_df)[names(attributes(migraine_df)) != "row.names"]
+```
+
+\newpage
+
+# Empirical statistical power estimation
+
+## Define Variables and parameters
+
+```{r}
+# Outcome and grouping variables
+outcomes   <- c("gh", "hc", "pf", "rf_p", "rf_e", "sf", "bp", "ef", "ew")
+group_vars <- c("m4", "msq", "ichd3b", "migraine_status")
+
+# Parameters
+Nsim  <- 5000       # Number of simulations
+alpha <- 0.05       # Significance level
+shift <- 5          # Location shift of interest under the alternative
+```
+
+\newpage
+
+## Power Analysis for Detecting a Location Shift
+
+```{r}
+estimate_empirical_power <- function(data, outcome, group_col,
+                                     shift = 5, Nsim = 5000, alpha = 0.05) {
+  # Identify the two comparison groups
+  if (group_col == "migraine_status") {
+    
+    # Exclude "Negative" rows, then store the remaining 2 levels
+    data <- subset(data, migraine_status != "Negative")
+    groups <- unique(data[[group_col]])
+
+  } else {
+    
+    # For other grouping variables directly store the 2 levels
+    groups <- c("Negative", "Positive")
+    
+  }
+  
+  # Make sure that no other grouping having >2 levels 
+  if (length(groups) != 2) {
+    stop(sprintf(
+      "Grouping variable '%s' must have exactly 2 levels after filtering; found %d.",
+      group_col, length(groups)
+    ))
+  }
+  
+  g1 <- groups[1]
+  g2 <- groups[2]
+
+  # Pull outcome values for each group
+  group1 <- data[data[[group_col]] == g1, outcome]
+  group2 <- data[data[[group_col]] == g2, outcome]
+
+  n1 <- length(group1)
+  n2 <- length(group2)
+
+  # Compute Wilcoxon W statistic for two samples
+  wilcox_W <- function(x, y) {
+    wilcox.test(x, y, alternative = "two.sided", exact = FALSE)$statistic
+  }
+
+  # Null distribution via bootstrap (resample within each group)
+  null_W <- replicate(Nsim, {
+    samp1 <- sample(group1, size = n1, replace = TRUE)
+    samp2 <- sample(group2, size = n2, replace = TRUE)
+    wilcox_W(samp1, samp2)
+  })
+
+  crit_low  <- quantile(null_W, probs = alpha / 2)
+  crit_high <- quantile(null_W, probs = 1 - alpha / 2)
+
+  # Alternative distribution: shift group2 by +shift, then test
+  alt_reject <- replicate(Nsim, {
+    samp1 <- sample(group1, size = n1, replace = TRUE)
+    samp2 <- sample(group2, size = n2, replace = TRUE) + shift
+
+    W <- wilcox_W(samp1, samp2)
+    (W <= crit_low) || (W >= crit_high)
+  })
+
+  power <- mean(alt_reject)
+
+  # Monte Carlo CI for the estimated power
+  se <- sqrt(power * (1 - power) / Nsim)
+  ci_low  <- max(0, power - 1.96 * se)
+  ci_high <- min(1, power + 1.96 * se)
+
+  # Return results
+  data.frame(Outcome    = outcome,
+             Grouping   = group_col,
+             Level1     = g1,
+             Level2     = g2,
+             Power      = power,
+             CI_low     = ci_low,
+             CI_high    = ci_high
+             )
+}
+```
+
+\newpage
+
+```{r}
+# Run power estimation across all outcomes and grouping variables
+for (outcome in outcomes) {
+
+  outcome_results <- lapply(group_vars, function(group_col) {
+    estimate_empirical_power(data      = migraine_df,
+                             outcome   = outcome,
+                             group_col = group_col,
+                             shift     = shift,
+                             Nsim      = Nsim,
+                             alpha     = alpha
+                             )
+    })
+
+  outcome_results <- do.call(rbind, outcome_results)
+  print(outcome_results)
+}
+```
