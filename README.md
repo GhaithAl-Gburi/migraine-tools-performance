@@ -1,29 +1,30 @@
-# README —  Migraine assessment tools performance and quality of life among undergraduate college students in Iraq
+# README —  Migraine Screening Tools Performance Empirical Power Estimation
 
 **Repository authors:** Ghaith Al‑Gburi, Mustafa Al-Gburi
 
-**Status:** completed
+**Study DOI / citation:** Unpublished
 
 ---
 
 ## Quick view
-Click to view the full results of the power estimation (rendered HTML via githack):  
-[Open power estimation results — rendered HTML (githack)](https://raw.githack.com/GhaithAl-Gburi/migraine-tools-performance/main/estimate_power.html)
+Click to view the full analysis results:
+[Open the full analysis report (PDF)](https://raw.githack.com/GhaithAl-Gburi/migraine-tools-performance/main/analysis_report.pdf)
 
 ---
 
 ## Purpose
-This repository contains the R Markdown notebook and supporting output files that provides a workflow to estimate statistical power for a set of migraine outcomes under an imposed shift between two groups using a bootstrap-based Wilcoxon test. The shift value is kept at 5, corresponding to the minimal clinically important difference reported for the SF-36 quality of life domains. 
+This repository contains `estimate_power.R` — an R script used to perform empirical statistical power estimation for a set of migraine outcomes under an imposed shift between two groups using a bootstrap-based Wilcoxon test. The shift value is kept at 5, corresponding to the minimal clinically important difference reported for the SF-36 quality of life domains. 
 
 > **Data privacy:** this repository does **not** include participant‑level identifiable data.
 
 ---
 
 ## Files in this repo
-- `estimate_power.Rmd` — R Markdown notebook that runs the bootstrap power estimation.
-- `estimate_power.html` — a rendered analysis summary documenting the results of power estimation.
-- `data collection tool/` — a directory containing the research survey and supporting documents.
-- `R_input.csv` — the input file required for power estimation. (To be added following publication)
+- `estimate_power.R` — R script.
+- `estimate_power.Rmd` — R Markdown file (script + narrative + results).
+- `analysis_report.pdf` — Rendered PDF report for the complete analysis workflow.
+- `data collection tool/` — Directory containing the research survey and supporting documents.
+- `migraine_screening_dataset.csv` — the input file required for power estimation. (To be added following publication)
 - `data.csv` — the full study dataset. (To be added following publication)
 - `LICENSE` — AGPL-3.0 license.
 - `README.md` — this file.
@@ -41,36 +42,33 @@ install.packages(c("rmarkdown", "knitr", "readr"))
 
 ---
 
-## Input file format (`R_input.csv`)
-The power script expects a CSV with the following columns:
+## Expected data format
+The power analysis script expects a CSV file with the following columns:
 
-```
-gh, hc, pf, rf_p, rf_e, sf, bp, ef, ew, m4, msq, ichd3b, migraine_status
-```
-
-Notes and expectations:
-- Outcome columns (`gh`, `hc`, `pf`, `rf_p`, `rf_e`, `sf`, `bp`, `ef`, `ew`) should be numeric and contain the measured SF-36 domains values.
-- Grouping columns (`m4`, `msq`, `ichd3b`) are expected to contain two levels labelled `Negative` and `Positive`. 
-- `migraine_status` is treated specially: rows with `migraine_status == "Negative"` are dropped before comparisons.
+| Category                          | Variable names                                                                   |
+|-----------------------------------|----------------------------------------------------------------------------------|
+| SF-36 outcome variables           | `gh`, `hc`, `pf`, `rf_p`, `rf_e`, `sf`, `bp`, `ef`, `ew`                       |
+| Binary grouping variables         | `m4`, `msq`, `ichd3b` (`Negative`, `Positive`)                                 |
+| Migraine status grouping variable | `migraine_status`                                                               |
 
 ---
 
 ## What the script does (high-level)
-- Clears the environment and reads `R_input.csv`.
-- Defines a set of outcomes and grouping variables.
-- For each outcome × grouping variable pair the script:
-  - extracts two groups (enforcing an order where possible),
-  - resample (with replacement) `Nsim` times to create the null distribution for the Man-Whitney U test.
-  - resample `Nsim` times to create samples with an imposed `shift` value to the second group,
-  - performs a Wilcoxon rank-sum test on each resample
-  - computes the empirical power as the fraction of bootstrap replicates with p-value < `alpha`.
-- Returns a table with estimated power and an approximate 95% CI for each outcome–assessment pair.
-
-Default parameters:
-- `Nsim <- 5000`
-- `alpha <- 0.05`
-- `shift <- 5`
-- `set.seed(123)`
+1. **Reads** the dataset.  
+2. **Defines analysis variables and parameters:**  
+   - Specifies SF-36 outcome variables (`gh`, `hc`, `pf`, `rf_p`, `rf_e`, `sf`, `bp`, `ef`, `ew`).  
+   - Specifies grouping variables (`m4`, `msq`, `ichd3b`, `migraine_status`).  
+   - Sets simulation parameters (`Nsim`, `alpha`, `shift`) and random seed.  
+3. **Empirical power estimation:**  
+   - For each outcome × assessment method pair, extracts two comparison groups.  
+   - Generates a null distribution of Wilcoxon rank-sum statistic using bootstrap resampling.  
+   - Generates an alternative distribution by imposing a location shift on the second group.  
+   - Performs a Wilcoxon rank-sum test on each simulated sample.  
+   - Estimates empirical statistical power as the proportion of simulated tests with p-value < `alpha`.  
+4. **Power uncertainty estimation:**  
+   - Computes an approximate 95% Monte Carlo confidence interval for the estimated power.  
+5. **Outputs:**  
+   - A table containing estimated power and confidence intervals for each outcome × assessment method pair.
 
 ---
 
@@ -88,10 +86,9 @@ This will produce an HTML file (for example `estimate_power.html`) which contain
 
 **Run the core code as plain R**
 
-If you prefer, extract the R code and run it as a script:
+If you prefer, run the code as a script:
 
 ```r
-knitr::purl("estimate_power.Rmd", output = "estimate_power.R")
 source("estimate_power.R")
 ```
 
@@ -101,7 +98,7 @@ Open `estimate_power.Rmd` and change `Nsim`, `alpha`, `shift`, or the `outcomes`
 ---
 
 ## Output
-The script prints a `results` data frame containing, for each outcome × assessment pair:
+The script prints a `results` data frame containing, for each outcome × assessment method pair:
 - `Outcome`, `Assessment`, `Level1`, `Level2`, `Power`, `CI_low`, `CI_high`.
 
 To save the result as a CSV file run the following code:
@@ -116,12 +113,19 @@ write.csv(results, "Power results/power_estimates.csv", row.names = FALSE)
 ## Reproducibility & tips
 - Keep a fixed seed when producing power estimates (the Rmd uses `set.seed(123)` by default).
 - If you plan to run very large `Nsim` values on a server, consider saving intermediate results and/or running the bootstrap in parallel (the current script runs sequentially).
-- Validate `R_input.csv` column names and levels before running; small typos in column names will cause errors.
+- Validate `migraine_screening_dataset.csv` column names and levels before running; small typos in column names will cause errors.
 
 ---
 
-## License
-This repository is released under the **GNU Affero General Public License v3.0**.
+## License & citation
+
+**License:** This repository is released under the **AGPL-3.0 License**.
+
+**How to cite this code:**  
+
+```
+
+```
 
 ---
 
